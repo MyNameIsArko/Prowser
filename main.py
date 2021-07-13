@@ -4,7 +4,6 @@ gi.require_version('WebKit2', '4.0')
 from gi.repository import Gtk, WebKit2, Gdk
 import json
 
-# TODO: save bookmarks to file
 bookmarks = {}
 
 button_bookmarks = {}
@@ -20,7 +19,7 @@ def fulfill_uri(uri):
         url = uri
     return url
 
-
+# * Main Window Class
 class WebWindow(Gtk.Window):
     def __init__(self):
         Gtk.Window.__init__(self, title="Browser")
@@ -90,13 +89,13 @@ class WebWindow(Gtk.Window):
             # Allow for bookmarking page
             self.bookmark_button.set_sensitive(True)
 
-            # If previous page is available - unlock button
+            # If previous page is available, unlock button
             if self.webview.can_go_back():
                 self.back_button.set_sensitive(True)
             else:
                 self.back_button.set_sensitive(False)
             
-            # If next page is available - unlock button
+            # If next page is available, unlock button
             if self.webview.can_go_forward():
                 self.forward_button.set_sensitive(True)
             else:
@@ -113,17 +112,20 @@ class WebWindow(Gtk.Window):
         self.url_entry.set_text(self.webview.get_uri())
 
     # Bookmark page, set its name and adress
-    # TODO: Display bookmarked pages
     def bookmark(self, button, is_changing = False):
+        # Run dialog for configuring bookmark
         dialog = BookmarkDialog(self, button, is_changing)
         response = dialog.run()
         
+        # Get entered name and url
         entry = dialog.entry_name.get_text()
         url = dialog.entry_url.get_text()
 
+        # If user pressed "Set"
         if response == Gtk.ResponseType.OK:
             entry = dialog.entry_name.get_text()
             url = dialog.entry_url.get_text()
+            # If bookmark already exists, rename button and replace bookmark
             if is_changing:
                 bookmarks.pop(button.name, -1)
                 button_bookmarks.pop(button.name, -1)
@@ -131,13 +133,16 @@ class WebWindow(Gtk.Window):
                 button_bookmarks[entry] = button
                 button.set_label(entry)
                 button.name = entry
+            # If not, create new bookmark button and add to bookmarks
             else:
                 bookmarks[entry] = url
                 bt = BookmarkContainer(entry, url, self)
                 bt.show()
                 button_bookmarks[entry] = bt
                 self.bookmark_view.pack_start(bt, False, False, 0)
+        # If user pressed "Remove"
         elif response == Gtk.ResponseType.CANCEL:
+            # If bookmark exists, remove it, else don't do anything
             try:
                 bookmarks.pop(button.name, -1)
                 bt = button_bookmarks[button.name]
@@ -145,11 +150,13 @@ class WebWindow(Gtk.Window):
                 button_bookmarks.pop(button.name, -1)
             except AttributeError:
                 pass
+        # Save bookmarks to file
         with open("bookmarks.json", "w") as file:
             json.dump(bookmarks, file)
             
         dialog.destroy()
 
+# ! Not connected
 class ErrorDialog(Gtk.Dialog):
     def __init__(self, parent):
         Gtk.Dialog.__init__(self, title="Error", transient_for=parent, flags=0)
@@ -160,37 +167,46 @@ class ErrorDialog(Gtk.Dialog):
         box.add(label)
         self.show_all()
 
+# Dialog for creating/editing bookmarks
 class BookmarkDialog(Gtk.Dialog):
     def __init__(self, parent, button, is_changing):
         Gtk.Dialog.__init__(self, title="Set Bookmark", transient_for=parent, flags=0)
         self.add_buttons("Remove", Gtk.ResponseType.CANCEL, "Set", Gtk.ResponseType.OK)
         self.set_size_request(300, 0)
         
+        # Box for name and url labels
         box_label = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        box_entry = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
 
         label_name = Gtk.Label(label="Name:")
-        self.entry_name = Gtk.Entry()
-        if is_changing:
-            self.entry_name.set_text(button.name)
         box_label.pack_start(label_name, True, True, 0)
-        box_entry.pack_start(self.entry_name, True, True, 0)
 
         label_url = Gtk.Label(label="Url:")
+        box_label.pack_start(label_url, True, True, 0)
+
+        # Box for name and url entries
+        box_entry = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+
+        self.entry_name = Gtk.Entry()
+        # If editing bookmark, set name to previous one
+        if is_changing:
+            self.entry_name.set_text(button.name)
+        box_entry.pack_start(self.entry_name, True, True, 0)
+
         self.entry_url = Gtk.Entry()
         self.entry_url.set_text(parent.webview.get_uri())
-        box_label.pack_start(label_url, True, True, 0)
         box_entry.pack_start(self.entry_url, True, True, 0)
 
+        # Box holding labels and entries
         all_box = Gtk.Box()
         all_box.pack_start(box_label, True, True, 0)
         all_box.pack_start(box_entry, True, True, 0)
 
+        # Get dialog area
         box = self.get_content_area()
         box.add(all_box)
         self.show_all()
 
-
+# Button containing bookmark
 class BookmarkContainer(Gtk.Button):
     def __init__(self, name, url, parent):
         Gtk.Button.__init__(self, label=name)
@@ -201,8 +217,10 @@ class BookmarkContainer(Gtk.Button):
 
     def pressed(self, widget, event):
         if event.type == Gdk.EventType.BUTTON_PRESS:
+            # If right-clicked, edit bookmark
             if event.button.button == 3:
                 self.parent.bookmark(self, is_changing = True)
+            # If left-clicked, open bookmark website
             if event.button.button == 1:
                 self.parent.url_entry.set_text(self.url)
                 self.parent.request_website(self)
@@ -212,6 +230,7 @@ win = WebWindow()
 win.connect("destroy", Gtk.main_quit)
 win.show_all()
 
+# Load bookmarks from file
 try:
     with open("bookmarks.json", "r") as file:
         bookmarks = json.load(file)   
